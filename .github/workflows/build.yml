@@ -1,0 +1,106 @@
+name: Build StayWeb
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stayweb-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulator:
+    name: Simulator build and tests
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Verify toolchain and project
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          python3 scripts/validate.py
+          python3 scripts/generate_project.py
+          git diff --exit-code -- StayWeb.xcodeproj
+      - name: Select available iPhone simulator
+        id: simulator
+        run: |
+          set -euo pipefail
+          DEVICE_ID=$(python3 scripts/select_simulator.py)
+          echo "id=$DEVICE_ID" >> "$GITHUB_OUTPUT"
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+      - name: Build and test
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          xcodebuild test \
+            -project StayWeb.xcodeproj -scheme StayWeb \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.id }}' \
+            -derivedDataPath build/Simulator \
+            -resultBundlePath build/Tests.xcresult \
+            CODE_SIGNING_ALLOWED=NO | tee build/simulator.log
+          ditto -c -k --sequesterRsrc --keepParent \
+            build/Simulator/Build/Products/Debug-iphonesimulator/StayWeb.app \
+            build/StayWeb-Simulator.zip
+      - name: Upload simulator build and test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: StayWeb-Simulator-and-Tests
+          path: |
+            build/StayWeb-Simulator.zip
+            build/Tests.xcresult
+            build/simulator.log
+          retention-days: 14
+
+  device:
+    name: Unsigned iPhone and iPad IPA
+    needs: simulator
+    runs-on: macos-15
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Compile device build
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          xcodebuild build \
+            -project StayWeb.xcodeproj -scheme StayWeb \
+            -configuration Release -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/Device \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            | tee build/device.log
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          mkdir -p build/package/Payload
+          ditto build/Device/Build/Products/Release-iphoneos/StayWeb.app \
+            build/package/Payload/StayWeb.app
+          (cd build/package && zip -qry ../StayWeb-unsigned.ipa Payload)
+          shasum -a 256 build/StayWeb-unsigned.ipa > build/SHA256SUMS.txt
+          printf '%s\n' \
+            'StayWeb 0.1.0 — UNSIGNED device build.' \
+            'This IPA requires signing before installation; it is not an App Store or TestFlight build.' \
+            'See README.md in the repository for installation and playback testing.' \
+            > build/INSTALL.txt
+      - name: Upload unsigned IPA and compile log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: StayWeb-Unsigned-IPA
+          path: |
+            build/StayWeb-unsigned.ipa
+            build/SHA256SUMS.txt
+            build/INSTALL.txt
+            build/device.log
+          retention-days: 14
