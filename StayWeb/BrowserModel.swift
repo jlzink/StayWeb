@@ -214,7 +214,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         }
         if isMainNavigation {
             let desiredAgent = wantsDisneyCompatibility(url) ? BrowserPolicy.desktopSafariAgent : nil
-            let identityChanged = webView.customUserAgent != desiredAgent
+            let identityChanged = (webView.customUserAgent ?? "") != (desiredAgent ?? "")
             prepareIdentity(for: url)
             // Reissue GET only when changing identity so its first HTTP request carries it.
             // Never replay POST/authentication submissions.

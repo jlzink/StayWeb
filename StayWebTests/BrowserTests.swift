@@ -50,8 +50,26 @@ final class BrowserTests: XCTestCase {
         XCTAssertEqual(model.webView.configuration.userContentController.userScripts.count, 1)
         model.webView.stopLoading()
         model.navigate("https://example.com/")
-        XCTAssertNil(model.webView.customUserAgent)
+        XCTAssertEqual(model.webView.customUserAgent ?? "", "")
         XCTAssertTrue(model.webView.configuration.userContentController.userScripts.isEmpty)
+        model.webView.stopLoading()
+    }
+
+    @MainActor
+    func testNativeIdentityDoesNotReplayEveryGET() async {
+        let model = BrowserModel()
+        await model.start()
+        let probe = PolicyProbe()
+        probe.forward = model
+        probe.cancelAllowedNavigation = true
+        model.webView.navigationDelegate = probe
+        let finished = expectation(description: "Native identity allows navigation without a reload loop")
+        probe.onDecision = { policy in
+            XCTAssertEqual(policy, .allow)
+            finished.fulfill()
+        }
+        model.navigate("https://example.com/")
+        await fulfillment(of: [finished], timeout: 10)
         model.webView.stopLoading()
     }
 
@@ -96,12 +114,13 @@ final class BrowserTests: XCTestCase {
 @MainActor
 private final class PolicyProbe: NSObject, WKNavigationDelegate {
     var forward: BrowserModel?
+    var cancelAllowedNavigation = false
     var onDecision: ((WKNavigationActionPolicy) -> Void)?
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                  preferences: WKWebpagePreferences,
                  decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void) {
         forward?.webView(webView, decidePolicyFor: action, preferences: preferences) { policy, prefs in
-            decisionHandler(policy, prefs)
+            decisionHandler(self.cancelAllowedNavigation ? .cancel : policy, prefs)
             let callback = self.onDecision
             self.onDecision = nil
             callback?(policy)
