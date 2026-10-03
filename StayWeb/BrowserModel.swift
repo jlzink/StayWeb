@@ -20,6 +20,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     private var observations: [NSKeyValueObservation] = []
     private var settings: [String: SiteSettings] = [:]
     private var started = false
+    private var disneyGate = DisneyGateRecovery()
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -42,6 +43,9 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         webView.uiDelegate = self
         webView.allowsBackForwardNavigationGestures = true
         observations = [
+            webView.observe(\.url, options: [.new]) { [weak self] _, _ in
+                Task { @MainActor in self?.locationChanged() }
+            },
             webView.observe(\.estimatedProgress, options: [.new]) { [weak self] _, _ in
                 Task { @MainActor in self?.sync() }
             },
@@ -93,9 +97,68 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         blockerStatus = !value.blockAds ? "Off for this site" : (ruleList == nil ? "Ad blocker unavailable" : "Starter rules active")
     }
 
+    private func wantsDisneyCompatibility(_ url: URL) -> Bool {
+        let value = preferences(for: url)
+        return BrowserPolicy.isDisney(url) && value.desktop && value.disneyCompatibility
+    }
+
+    private func prepareIdentity(for url: URL) {
+        let compatible = wantsDisneyCompatibility(url)
+        webView.customUserAgent = compatible ? BrowserPolicy.desktopSafariAgent : nil
+        let controller = webView.configuration.userContentController
+        controller.removeAllUserScripts()
+        if compatible {
+            // Only modify the top-level Disney document; leave authentication sites alone.
+            // This is device-detection compatibility, not a media-capability polyfill.
+            let script = """
+            (() => {
+              if (location.protocol !== 'https:' ||
+                  !['www.disneyplus.com', 'disneyplus.com'].includes(location.hostname)) return;
+              for (const [key, value] of [['platform', 'MacIntel'], ['maxTouchPoints', 0]]) {
+                try { Object.defineProperty(navigator, key, {get: () => value, configurable: true}); }
+                catch (_) {}
+              }
+            })();
+            """
+            controller.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart,
+                                                  forMainFrameOnly: true, in: .page))
+        }
+    }
+
+    private func locationChanged() {
+        guard let url = webView.url else { return }
+        address = url.absoluteString
+        currentHost = url.host?.lowercased() ?? ""
+        currentSettings = preferences(for: url)
+        // Also catch History API / SPA transitions, which may not invoke navigation policy.
+        if !webView.isLoading, wantsDisneyCompatibility(url), BrowserPolicy.disneyWebHome(for: url) != nil {
+            if let destination = disneyGate.destination(for: url) {
+                notice = "Trying Disney+ web home with desktop compatibility."
+                prepareIdentity(for: destination)
+                webView.load(URLRequest(url: destination))
+            } else {
+                notice = "Disney+ still returned to its app-download page. Automatic retries stopped; playback is not yet working."
+            }
+        }
+    }
+
+    func reload() {
+        disneyGate.reset()
+        if let url = webView.url {
+            prepareIdentity(for: url)
+            if wantsDisneyCompatibility(url), let home = disneyGate.destination(for: url) {
+                webView.load(URLRequest(url: home))
+                return
+            }
+        }
+        webView.reload()
+    }
+
     func navigate(_ input: String) {
         guard ready, let url = BrowserPolicy.address(input) else { return }
         notice = nil
+        disneyGate.reset()
+        prepareIdentity(for: url)
         webView.load(URLRequest(url: url))
     }
 
@@ -105,7 +168,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         if let data = try? JSONEncoder().encode(settings) { defaults.set(data, forKey: "siteSettings") }
         currentSettings = value
         apply(value)
-        webView.reload()
+        reload()
     }
 
     func clearData() async {
@@ -138,6 +201,29 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             notice = "Blocked an App Store redirect. Playback still depends on the website."
             decisionHandler(.cancel, preferences); return
         }
+        let isMainNavigation = navigationAction.targetFrame?.isMainFrame != false
+        if isMainNavigation && wantsDisneyCompatibility(url), BrowserPolicy.disneyWebHome(for: url) != nil {
+            if let destination = disneyGate.destination(for: url) {
+                decisionHandler(.cancel, preferences)
+                notice = "Trying Disney+ web home with desktop compatibility."
+                prepareIdentity(for: destination)
+                webView.load(URLRequest(url: destination))
+                return
+            }
+            notice = "Disney+ still returned to its app-download page. Automatic retries stopped; playback is not yet working."
+        }
+        if isMainNavigation {
+            let desiredAgent = wantsDisneyCompatibility(url) ? BrowserPolicy.desktopSafariAgent : nil
+            let identityChanged = webView.customUserAgent != desiredAgent
+            prepareIdentity(for: url)
+            // Reissue GET only when changing identity so its first HTTP request carries it.
+            // Never replay POST/authentication submissions.
+            if identityChanged && (navigationAction.request.httpMethod ?? "GET") == "GET" {
+                decisionHandler(.cancel, preferences)
+                webView.load(navigationAction.request)
+                return
+            }
+        }
         // Reload user-tapped web links ourselves to avoid the normal link-activation
         // path into installed apps. Only GET is replayed; preserve POST/form bodies.
         if navigationAction.navigationType == .linkActivated,
@@ -165,6 +251,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         title = webView.title ?? "StayWeb"
         address = webView.url?.absoluteString ?? address
         sync()
+        locationChanged()
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {

@@ -28,7 +28,7 @@ struct BrowserView: View {
                     .accessibilityLabel("Website address or search")
                 Button {
                     if browser.loading { browser.webView.stopLoading() }
-                    else { browser.webView.reload() }
+                    else { browser.reload() }
                 } label: {
                     Image(systemName: browser.loading ? "xmark" : "arrow.clockwise")
                 }.accessibilityLabel(browser.loading ? "Stop loading" : "Reload")
@@ -89,6 +89,11 @@ struct BrowserView: View {
                         Toggle("Block ads and trackers", isOn: setting(\.blockAds))
                         Toggle("Request desktop website", isOn: setting(\.desktop))
                         Toggle("Block App Store redirects", isOn: setting(\.blockAppLinks))
+                        if browser.currentHost == "www.disneyplus.com" || browser.currentHost == "disneyplus.com" {
+                            Toggle("Disney+ desktop compatibility", isOn: setting(\.disneyCompatibility))
+                            Text("Uses a desktop Safari identity and tries web home once if Disney+ sends you to its download page. Requires desktop mode. Playback remains experimental.")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
                     }.disabled(browser.currentHost.isEmpty)
                     Section("Protection") {
                         LabeledContent("Ad blocker", value: browser.blockerStatus)
@@ -99,7 +104,7 @@ struct BrowserView: View {
                     Section("Website data") {
                         Button("Clear cookies and cache", role: .destructive) { clearConfirmation = true }
                     }
-                    Section("Prototype 0.1.0") {
+                    Section("Prototype 0.1.1") {
                         Text("One tab • iPhone and iPad • iOS 16+")
                         Text("Desktop mode requests a desktop site; it does not turn iOS into macOS. No DRM bypass or guaranteed streaming compatibility. Site-specific app-prompt removal is not included until validated selectors are available.")
                             .font(.footnote).foregroundStyle(.secondary)

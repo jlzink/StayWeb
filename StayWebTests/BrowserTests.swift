@@ -12,6 +12,49 @@ final class BrowserTests: XCTestCase {
         }
     }
 
+    func testDisneyGateRecoveryIsScopedAndBounded() throws {
+        var recovery = DisneyGateRecovery()
+        let gate = try XCTUnwrap(URL(string: "https://www.disneyplus.com/get-app?token=private#test"))
+        XCTAssertEqual(recovery.destination(for: gate)?.absoluteString, "https://www.disneyplus.com/home")
+        XCTAssertNil(recovery.destination(for: gate), "Must stop instead of looping")
+        recovery.reset()
+        XCTAssertNotNil(recovery.destination(for: gate))
+        XCTAssertEqual(BrowserPolicy.disneyWebHome(for: URL(string: "https://www.disneyplus.com/en-us/get-app/")!)?.path, "/en-us/home")
+        for value in ["https://www.disneyplus.com.evil.example/get-app",
+                      "https://help.disneyplus.com/get-app", "https://example.com/get-app",
+                      "http://www.disneyplus.com/get-app", "https://www.disneyplus.com/login",
+                      "https://www.disneyplus.com/arbitrary/get-app", "https://www.disneyplus.com/a/b/get-app"] {
+            XCTAssertNil(BrowserPolicy.disneyWebHome(for: URL(string: value)!))
+        }
+    }
+
+    func testOldSettingsKeepUserChoices() throws {
+        let data = Data(#"{"blockAds":false,"desktop":false,"blockAppLinks":false}"#.utf8)
+        let decoded = try JSONDecoder().decode(SiteSettings.self, from: data)
+        XCTAssertFalse(decoded.blockAds)
+        XCTAssertFalse(decoded.desktop)
+        XCTAssertFalse(decoded.blockAppLinks)
+        XCTAssertTrue(decoded.disneyCompatibility)
+        XCTAssertEqual(try JSONDecoder().decode(SiteSettings.self, from: JSONEncoder().encode(decoded)), decoded)
+    }
+
+    @MainActor
+    func testDisneyIdentityIsSetBeforeLoadAndRemovedOffSite() async throws {
+        let domain = "StayWebTests-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: domain))
+        defer { defaults.removePersistentDomain(forName: domain) }
+        let model = BrowserModel(defaults: defaults)
+        await model.start()
+        model.navigate("https://www.disneyplus.com/")
+        XCTAssertEqual(model.webView.customUserAgent, BrowserPolicy.desktopSafariAgent)
+        XCTAssertEqual(model.webView.configuration.userContentController.userScripts.count, 1)
+        model.webView.stopLoading()
+        model.navigate("https://example.com/")
+        XCTAssertNil(model.webView.customUserAgent)
+        XCTAssertTrue(model.webView.configuration.userContentController.userScripts.isEmpty)
+        model.webView.stopLoading()
+    }
+
     func testAddressAndSearch() {
         XCTAssertEqual(BrowserPolicy.address(" disneyplus.com ")?.absoluteString, "https://disneyplus.com")
         XCTAssertEqual(BrowserPolicy.address("https://example.com/path?q=test")?.host, "example.com")

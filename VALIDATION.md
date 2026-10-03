@@ -1,16 +1,5 @@
-# Validation at source delivery
+# Validation
 
-Passed locally:
-- Python scripts compile; deterministic Xcode project regeneration.
-- Xcode object IDs and resource/source references are internally consistent.
-- Shared Xcode scheme is valid XML; privacy manifest is valid plist.
-- Ad rule JSON and third-party scope; positive and negative domain-boundary checks.
-- GitHub Actions YAML parses and defines simulator tests before unsigned IPA build.
+v0.1.0: GitHub run 37159950606 passed simulator compilation/XCTest and physical-device compilation/IPA packaging. User installed on iPhone and completed Disney+ login; the site then displayed `/get-app`.
 
-Not run here:
-- Xcode/Swift compilation (no Apple SDK installed in this environment).
-- XCTest execution on iOS Simulator.
-- Real-device installation, ad filtering, universal-link behavior, or Disney+ playback.
-
-The included GitHub workflow performs compilation and XCTest when pushed.
-Passing CI does not establish streaming compatibility.
+v0.1.1 adds exact-host desktop identity, preserved preference decoding, and single-attempt gate recovery including same-document URL observation. New tests cover origin/path boundaries, recovery-loop limits, settings migration, and setting/clearing the identity before navigation. GitHub CI must pass before delivery. Actual Disney+ playback requires another device test.

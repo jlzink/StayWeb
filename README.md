@@ -1,11 +1,30 @@
 # StayWeb — iPhone / iPad browser prototype
 
-A native SwiftUI + WKWebView browser focused on staying on the web. Version 0.1.0,
+A native SwiftUI + WKWebView browser focused on staying on the web. Version 0.1.1,
 iOS/iPadOS 16 or newer. One universal app target. No third-party application dependencies.
 
-**Status:** source prototype. Xcode compilation and simulator tests must run on GitHub;
-they have not been executed in the source-generation environment. Disney+ login and
-protected playback are unverified on both iPhone and iPad. This is not a DRM bypass.
+**Status:** v0.1.0 compiled and passed simulator tests on GitHub. A real iPhone
+successfully logged in but Disney+ redirected to `/get-app`. v0.1.1 adds a scoped,
+experimental desktop compatibility mode and one-shot recovery from that page.
+Real-device playback is not yet validated. This is not a DRM bypass.
+
+## Updating from 0.1.0
+
+Sign/sideload the new IPA over the old app using the same Apple account and bundle
+ID. Open Disney+ with both **Request desktop website** and **Disney+ desktop
+compatibility** enabled (defaults). A prior per-site desktop-off choice is preserved;
+turn it on if necessary. The update retains existing cookies when installed over
+the old app with the same identity. If the download page persists, clear website
+data from Settings and sign in again. Recovery tries `/home` only once per explicit
+navigation/reload, then reports the remaining incompatibility instead of looping.
+
+The compatibility mode sets a desktop Safari User-Agent using `customUserAgent`
+before the first Disney+ request, and sets `navigator.platform` / `maxTouchPoints`
+for the top-level Disney page at document start. It is limited to the exact
+`disneyplus.com` and `www.disneyplus.com` HTTPS hosts. Other origins revert to their
+normal identity. It does not add codecs or bypass DRM, and the service may still
+reject playback. The `/home` recovery target is experimental and may change.
+
 
 ## Get your first GitHub build
 
@@ -47,7 +66,8 @@ its privacy disclosures, and release validation.
 - URL/search bar, back/forward, reload/stop, native share sheet and swipe navigation.
 - iPhone/iPad adaptive layout with portrait and landscape support.
 - Desktop site requests enabled by default using WebKit's public desktop content
-  mode. No spoofed JavaScript fingerprint or private browser API.
+  mode. Disney+ additionally uses the opt-out compatibility identity described above.
+  No private browser API.
 - A bundled, deliberately small set of third-party ad/tracker network rules,
   compiled with `WKContentRuleListStore` before browsing is enabled.
 - Persistent **exact-host** settings for ad blocking, desktop mode, and App Store
