@@ -15,6 +15,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     @Published var currentSettings = SiteSettings()
     @Published var currentHost = ""
     @Published var blockedAppLinks = 0
+    var openNewTab: ((URL) -> Void)?
     let webView: WKWebView
     @Published var filterVersion = "Not loaded"
     private var activeRuleCount = 0
@@ -93,6 +94,25 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         ready = true
     }
 
+    func reuseProtection(from source: BrowserModel) {
+        guard !started else { return }
+        started = true
+        ruleList = source.ruleList
+        streamingScript = source.streamingScript
+        activeRuleCount = source.activeRuleCount
+        filterVersion = source.filterVersion
+        blockerStatus = ruleList == nil ? "Ad blocker unavailable" : "\(activeRuleCount) rules ready"
+        ready = true
+    }
+
+    func refreshSettings() {
+        if let data = defaults.data(forKey: "siteSettings"),
+           let saved = try? JSONDecoder().decode([String: SiteSettings].self, from: data) {
+            settings = saved
+        }
+        if let url = webView.url { currentSettings = preferences(for: url) }
+    }
+
     private func sync() {
         progress = webView.estimatedProgress
         loading = webView.isLoading
@@ -101,7 +121,12 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     }
 
     private func preferences(for url: URL) -> SiteSettings {
-        settings[url.host?.lowercased() ?? ""] ?? SiteSettings()
+        // Read the shared store so other tabs immediately honor saved site choices.
+        if let data = defaults.data(forKey: "siteSettings"),
+           let saved = try? JSONDecoder().decode([String: SiteSettings].self, from: data) {
+            settings = saved
+        }
+        return settings[url.host?.lowercased() ?? ""] ?? SiteSettings()
     }
 
     private func apply(_ value: SiteSettings) {
@@ -191,6 +216,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
 
     func saveSettings(_ value: SiteSettings) {
         guard !currentHost.isEmpty else { return }
+        refreshSettings()
         settings[currentHost] = value
         if let data = try? JSONEncoder().encode(settings) { defaults.set(data, forKey: "siteSettings") }
         currentSettings = value
@@ -227,6 +253,13 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             blockedAppLinks += 1
             notice = "Blocked an App Store redirect. Playback still depends on the website."
             decisionHandler(.cancel, preferences); return
+        }
+        if navigationAction.targetFrame == nil,
+           navigationAction.navigationType == .linkActivated,
+           (navigationAction.request.httpMethod ?? "GET") == "GET", let openNewTab {
+            decisionHandler(.cancel, preferences)
+            openNewTab(url)
+            return
         }
         let isMainNavigation = navigationAction.targetFrame?.isMainFrame != false
         if isMainNavigation && wantsDisneyCompatibility(url), BrowserPolicy.disneyWebHome(for: url) != nil {
@@ -303,9 +336,12 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
 
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-        // A single-tab prototype: load user-initiated target=_blank links in place.
+        // Keep unsolicited popups blocked; tapped links can open a new protected tab.
         if navigationAction.targetFrame == nil, navigationAction.navigationType == .linkActivated {
-            webView.load(navigationAction.request)
+            if let url = navigationAction.request.url, BrowserPolicy.isWeb(url),
+               !BrowserPolicy.isAppStore(url), let openNewTab {
+                openNewTab(url)
+            } else { webView.load(navigationAction.request) }
         } else {
             notice = "Popup blocked. Some sign-in flows may require a same-tab login."
         }

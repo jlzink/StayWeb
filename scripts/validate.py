@@ -21,6 +21,8 @@ ET.parse(root / 'StayWeb.xcodeproj/xcshareddata/xcschemes/StayWeb.xcscheme')
 project = (root / 'StayWeb.xcodeproj/project.pbxproj').read_text()
 for folder in ['StayWeb', 'StayWebTests']:
     for path in (root / folder).rglob('*'):
+        if any(parent.suffix == '.xcassets' for parent in path.parents):
+            continue
         if path.suffix in ['.swift', '.json', '.xcprivacy', '.js', '.txt']:
             assert str(path.relative_to(root)) in project, f'Missing project file: {path}'
 print('PASS: prepared filter count and structure, privacy plist, shared scheme and project source membership')

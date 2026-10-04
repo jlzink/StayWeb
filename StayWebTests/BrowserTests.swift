@@ -3,6 +3,49 @@ import WebKit
 @testable import StayWeb
 
 final class BrowserTests: XCTestCase {
+    @MainActor
+    func testTabsKeepIndependentWebViewsAndSelection() {
+        let store = TabStore()
+        let first = store.selected
+        first.browser.address = "https://example.com/first"
+        let second = store.add()
+        XCTAssertEqual(store.tabs.count, 2)
+        XCTAssertEqual(store.selectedID, second.id)
+        XCTAssertFalse(first.browser.webView === second.browser.webView)
+        second.browser.address = "https://example.com/second"
+        store.select(first.id)
+        XCTAssertTrue(store.selected.browser === first.browser)
+        XCTAssertEqual(store.selected.browser.address, "https://example.com/first")
+        store.close(second.id)
+        XCTAssertEqual(store.selectedID, first.id)
+        store.close(first.id)
+        XCTAssertEqual(store.tabs.count, 1)
+        XCTAssertTrue(store.selected.browser.address.isEmpty)
+        XCTAssertNotEqual(store.selectedID, first.id)
+    }
+
+    @MainActor
+    func testNewTabsInheritReadyProtection() async {
+        let store = TabStore()
+        await store.prepare(store.selected.browser)
+        let version = store.selected.browser.filterVersion
+        let second = store.add()
+        await store.prepare(second.browser)
+        XCTAssertTrue(second.browser.ready)
+        XCTAssertEqual(second.browser.filterVersion, version)
+        XCTAssertNotEqual(second.browser.blockerStatus, "Ad blocker unavailable")
+    }
+
+    func testCustomShortcutsOnlyAcceptWebAddresses() throws {
+        let item = try XCTUnwrap(StreamingShortcut.custom(name: "My Service", address: "example.com/watch"))
+        XCTAssertEqual(item.address, "https://example.com/watch")
+        XCTAssertNil(StreamingShortcut.custom(name: "", address: "example.com"))
+        XCTAssertNil(StreamingShortcut.custom(name: "Bad", address: "javascript:alert(1)"))
+        XCTAssertNil(StreamingShortcut.custom(name: "Bad", address: "disneyplus://home"))
+        XCTAssertNil(StreamingShortcut.custom(name: "Bad", address: "https://user:secret@example.com/"))
+        XCTAssertEqual(try JSONDecoder().decode(StreamingShortcut.self, from: JSONEncoder().encode(item)).id, item.id)
+    }
+
     func testStoreRedirectBoundaries() throws {
         for value in ["https://apps.apple.com/us/app/id123", "https://itunes.apple.com/app/id123", "https://apps.apple.com./id123"] {
             XCTAssertTrue(BrowserPolicy.isAppStore(try XCTUnwrap(URL(string: value))))

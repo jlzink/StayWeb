@@ -8,7 +8,18 @@ struct WebSurface: UIViewRepresentable {
 }
 
 struct BrowserView: View {
-    @StateObject private var browser = BrowserModel()
+    @StateObject private var tabs = TabStore()
+    var body: some View {
+        BrowserTabView(browser: tabs.selected.browser, tabs: tabs)
+            .id(tabs.selectedID)
+    }
+}
+
+struct BrowserTabView: View {
+    @ObservedObject var browser: BrowserModel
+    @ObservedObject var tabs: TabStore
+    @State private var showTabs = false
+    @State private var showHome = false
     @State private var input = ""
     @State private var showSettings = false
     @State private var clearConfirmation = false
@@ -45,28 +56,20 @@ struct BrowserView: View {
             }
             ZStack {
                 WebSurface(webView: browser.webView)
-                if browser.address.isEmpty {
-                    VStack(spacing: 20) {
-                        Image(systemName: "globe.europe.africa.fill")
-                            .font(.system(size: 64)).foregroundStyle(.teal)
-                        Text("StayWeb").font(.largeTitle.bold())
-                        Text("Your websites. In your browser.").foregroundStyle(.secondary)
-                        Button("Open Disney+") { open("https://www.disneyplus.com/") }
-                            .buttonStyle(.borderedProminent).tint(.teal)
-                            .disabled(!browser.ready)
-                        Text("Disney+ playback is experimental.\nDesktop mode cannot guarantee streaming support.")
-                            .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                        Text(browser.blockerStatus).font(.caption)
-                    }.padding().frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color(uiColor: .systemBackground))
+                if browser.address.isEmpty || showHome {
+                    StreamingHome(ready: browser.ready, open: open, openInNewTab: { tabs.add($0) })
                 }
             }
+
             HStack {
-                Button { browser.webView.goBack() } label: { Image(systemName: "chevron.left") }
+                Button { showHome = false; browser.webView.goBack() } label: { Image(systemName: "chevron.left") }
                     .disabled(!browser.canBack).accessibilityLabel("Back")
                 Spacer()
-                Button { browser.webView.goForward() } label: { Image(systemName: "chevron.right") }
+                Button { showHome = false; browser.webView.goForward() } label: { Image(systemName: "chevron.right") }
                     .disabled(!browser.canForward).accessibilityLabel("Forward")
+                Spacer()
+                Button { editingAddress = false; showHome.toggle() } label: { Image(systemName: "house") }
+                    .accessibilityLabel("Streaming home")
                 Spacer()
                 if let url = browser.webView.url {
                     ShareLink(item: url) { Image(systemName: "square.and.arrow.up") }
@@ -74,11 +77,19 @@ struct BrowserView: View {
                     Image(systemName: "square.and.arrow.up").foregroundStyle(.secondary)
                 }
                 Spacer()
+                Button { editingAddress = false; showTabs = true } label: {
+                    ZStack {
+                        Image(systemName: "square.on.square")
+                        Text("\(tabs.tabs.count)").font(.system(size: 9, weight: .bold)).offset(x: 2, y: 2)
+                    }
+                }.accessibilityLabel("Tabs, \(tabs.tabs.count) open")
+                Spacer()
                 Button { showSettings = true } label: { Image(systemName: "slider.horizontal.3") }
                     .accessibilityLabel("Site settings")
             }.font(.title3).padding().background(.thinMaterial)
         }
-        .task { await browser.start() }
+        .task { input = browser.address; await tabs.prepare(browser) }
+        .sheet(isPresented: $showTabs) { TabSwitcher(tabs: tabs) }
         .onChange(of: browser.address) { newValue in
             if !editingAddress { input = newValue }
         }
@@ -114,8 +125,8 @@ struct BrowserView: View {
                     Section("Website data") {
                         Button("Clear cookies and cache", role: .destructive) { clearConfirmation = true }
                     }
-                    Section("Prototype 0.1.2") {
-                        Text("One tab • iPhone and iPad • iOS 16+")
+                    Section("StayWeb 0.2.0") {
+                        Text("Multiple tabs • iPhone and iPad • iOS 16+")
                         Text("Desktop mode requests a desktop site; it does not turn iOS into macOS. No DRM bypass or guaranteed streaming compatibility. Site-specific app-prompt removal is not included until validated selectors are available.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
@@ -123,7 +134,7 @@ struct BrowserView: View {
                 .navigationTitle("StayWeb Settings")
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showSettings = false } } }
                 .confirmationDialog("Clear all website data? This signs you out of websites.", isPresented: $clearConfirmation, titleVisibility: .visible) {
-                    Button("Clear website data", role: .destructive) { Task { await browser.clearData() } }
+                    Button("Clear website data", role: .destructive) { Task { await tabs.clearData() } }
                 }
             }
         }
@@ -131,6 +142,7 @@ struct BrowserView: View {
 
     private func open(_ value: String) {
         editingAddress = false
+        showHome = false
         browser.navigate(value)
     }
 

@@ -1,3 +1,15 @@
+## Version 0.2.0 — streaming home and tabs
+
+- New teal globe/shield/play app icon, packaged in an asset catalog for iPhone and iPad.
+- Startup dashboard with 28 streaming services, service search, and persistent custom shortcuts.
+- Tab switcher with new, select and close actions; closing the last tab creates a fresh start page.
+- Each tab keeps its own WebKit view and navigation history during the app session. Tabs are not restored after app termination.
+- Touch and hold a service to open it in a new tab. Tapped target-blank web links also open a protected tab; unsolicited popups remain blocked.
+- Switching tabs pauses media in the previous tab. Press play to resume when returning.
+- Shared website login storage and site settings, with the existing streaming filters retained.
+
+Install the unsigned IPA using the same signing identity and bundle ID as the previous build to update it in place.
+
 # StayWeb — iPhone / iPad browser prototype
 
 A native SwiftUI + WKWebView browser focused on staying on the web. Version 0.1.2,
