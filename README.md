@@ -1,6 +1,6 @@
 # StayWeb — iPhone / iPad browser prototype
 
-A native SwiftUI + WKWebView browser focused on staying on the web. Version 0.1.1,
+A native SwiftUI + WKWebView browser focused on staying on the web. Version 0.1.2,
 iOS/iPadOS 16 or newer. One universal app target. No third-party application dependencies.
 
 **Status:** v0.1.0 compiled and passed simulator tests on GitHub. A real iPhone
@@ -8,7 +8,7 @@ successfully logged in but Disney+ redirected to `/get-app`. v0.1.1 adds a scope
 experimental desktop compatibility mode and one-shot recovery from that page.
 Real-device playback is not yet validated. This is not a DRM bypass.
 
-## Updating from 0.1.0
+## Updating from an earlier build
 
 Sign/sideload the new IPA over the old app using the same Apple account and bundle
 ID. Open Disney+ with both **Request desktop website** and **Disney+ desktop
@@ -20,9 +20,9 @@ navigation/reload, then reports the remaining incompatibility instead of looping
 
 The compatibility mode sets a desktop Safari User-Agent using `customUserAgent`
 before the first Disney+ request, and sets `navigator.platform` / `maxTouchPoints`
-for the top-level Disney page at document start. It is limited to the exact
-`disneyplus.com` and `www.disneyplus.com` HTTPS hosts. Other origins revert to their
-normal identity. It does not add codecs or bypass DRM, and the service may still
+for supported top-level streaming pages at document start. Version 0.1.2 uses
+this identity for HTTPS Disney+, Prime Video, Hulu and Peacock domain families
+when desktop mode is enabled. Other origins revert to their normal identity. It does not add codecs or bypass DRM, and the service may still
 reject playback. The `/home` recovery target is experimental and may change.
 
 
@@ -36,7 +36,7 @@ reject playback. The `/home` recovery target is experimental and may change.
 3. Push to GitHub. In **Actions → Build StayWeb**, open the new run.
    The workflow also supports **Run workflow** once it is on the default branch.
 4. The first job compiles the app and runs XCTest on an available iPhone simulator.
-   The second job builds for physical iPhones/iPads and packages an unsigned IPA.
+   After the tests pass, the same job builds for physical iPhones/iPads and packages an unsigned IPA.
 5. Download **StayWeb-Unsigned-IPA** from the successful run's Artifacts section,
    unzip that artifact, and find `StayWeb-unsigned.ipa` inside it.
 
@@ -44,7 +44,7 @@ No Apple certificates, passwords or developer-team secrets are required to compi
 The workflow has read-only repository permissions and does not upload to Apple or
 publish a release. Runner usage remains subject to your GitHub account's allowance.
 It uses `macos-15` with Xcode 16.4. If GitHub later removes that Xcode installation,
-update `DEVELOPER_DIR` in both jobs to an installed stable version and rerun tests.
+update `DEVELOPER_DIR` in the job to an installed stable version and rerun tests.
 
 ## Installation: compilation is not signing
 
@@ -66,9 +66,9 @@ its privacy disclosures, and release validation.
 - URL/search bar, back/forward, reload/stop, native share sheet and swipe navigation.
 - iPhone/iPad adaptive layout with portrait and landscape support.
 - Desktop site requests enabled by default using WebKit's public desktop content
-  mode. Disney+ additionally uses the opt-out compatibility identity described above.
+  mode. The four supported streaming services also use a desktop compatibility identity.
   No private browser API.
-- A bundled, deliberately small set of third-party ad/tracker network rules,
+- A bundled snapshot of Ultimate Ad Filter converted to WebKit rules,
   compiled with `WKContentRuleListStore` before browsing is enabled.
 - Persistent **exact-host** settings for ad blocking, desktop mode, and App Store
   redirects. Settings take effect on reload and are applied before main navigation.
@@ -91,7 +91,7 @@ its privacy disclosures, and release validation.
 
 One tab only; no bookmark/history manager, download manager, private mode, default
 browser entitlement, background audio guarantee or content-filter updater. The
-starter rules cover nine common ad/tracker domains and do not block every ad.
+bundled filters are refreshed at build time rather than automatically on device.
 They do not guarantee removal of commercials embedded in streaming video.
 
 Automatic script popups are blocked. User-tapped new-window links load in the same
@@ -105,7 +105,7 @@ narrowly scoped site adapter only after inspecting and testing the real page.
 
 ## First device test (on both iPhone and iPad)
 
-1. Launch; confirm the start screen says starter rules are ready.
+1. Launch; confirm the start screen shows more than 1,000 rules ready. Settings must show version 0.1.2 and the filter snapshot version.
 2. Open Disney+, sign in yourself, and attempt playback with desktop mode on.
 3. If playback fails, disable ad blocking for that host and retry. Then test mobile
    mode. Record which combination reaches login, catalog, and actual playback.
@@ -127,7 +127,9 @@ Open `StayWeb.xcodeproj` in Xcode. Select scheme **StayWeb** and an iOS simulato
 The checked-in project has no CocoaPods, Swift package, Homebrew or XcodeGen setup.
 
 ```sh
+python3 scripts/prepare_filters.py
 python3 scripts/validate.py
+node scripts/test_prime_filter.js
 # After adding/removing Swift or resource files:
 python3 scripts/generate_project.py
 ```
@@ -138,7 +140,7 @@ project. Do not hand-edit the generated project; edit the generator instead.
 
 XCTest covers URL normalization, App Store hostname boundaries, actual WebKit rule
 compilation, and an actual WebKit navigation being rejected by the browser delegate.
-The portable validator checks files and rule boundaries only; it cannot prove Swift
+The portable validator checks files and generated rule metadata only; it cannot prove Swift
 compilation or website behavior. CI uploads the `.xcresult` bundle and build logs.
 
 ## References

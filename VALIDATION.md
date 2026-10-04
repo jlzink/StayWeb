@@ -11,3 +11,14 @@ uses the real XML parser to remove an ad period while preserving ContentProtecti
 and the movie period, and leaves malformed/all-ad/no-ad manifests unchanged.
 The full converted rule list must compile in WKContentRuleListStore. Actual
 subscriber playback and all-ad removal remain unverified until device testing.
+
+Additional 0.1.2 DOM fixtures passed locally for Disney/Hulu/Peacock fetch
+text, JSON and clone reads, and namespaced Hulu/Prime manifests. To reproduce:
+
+```sh
+npm install --prefix build/test-deps --ignore-scripts --no-audit --no-fund jsdom@26.1.0
+NODE_PATH=build/test-deps/node_modules node scripts/test_streaming_dom.cjs
+```
+
+These fixture checks preserve movie URLs and DRM metadata; they do not replace
+real subscriber playback testing.
