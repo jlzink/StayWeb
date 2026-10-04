@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Snapshot maintained rules once per build; simulator and device use identical data."""
-import hashlib, json, pathlib, subprocess, urllib.request
+import hashlib, json, pathlib, plistlib, subprocess, urllib.request
 root = pathlib.Path(__file__).resolve().parents[1]
 out = root/'build/filters'; out.mkdir(parents=True, exist_ok=True)
 resources = root/'StayWeb/Resources'
@@ -13,6 +13,15 @@ converter = out/'ConverterTool'
 digest = download('https://github.com/AdguardTeam/SafariConverterLib/releases/download/v4.3.0/ConverterTool', converter)
 assert digest == '6687be9f1a77abd5299299086c5fbffd0d1b5baec755eb4808aa2f53e275d3c0', 'Converter checksum mismatch'
 converter.chmod(0o755)
+# Upstream CLI omits its SwiftPM resource bundle. Restore the resources from
+# the exact swift-psl revision in the converter release's Package.resolved.
+bundle = out/'swift-psl_PublicSuffixList.bundle'
+bundle.mkdir(exist_ok=True)
+(bundle/'Info.plist').write_bytes(plistlib.dumps({'CFBundleIdentifier':'org.adguard.swift-psl-resources', 'CFBundleName':'PublicSuffixList', 'CFBundlePackageType':'BNDL'}))
+psl_revision = '7ccee9d576d4ca45219440e346f61117f44c816f'
+for name in ['common.bin', 'negated.bin', 'asterisk.bin', 'version.txt']:
+    download(f'https://raw.githubusercontent.com/ameshkov/swift-psl/{psl_revision}/Sources/PublicSuffixList/Resources/{name}', bundle/name)
+
 source_url = 'https://filters.adavoid.org/ultimate-ad-filter.txt'
 source = out/'ultimate.txt'
 source_sha = download(source_url, source)
