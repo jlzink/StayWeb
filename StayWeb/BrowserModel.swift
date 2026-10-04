@@ -41,6 +41,9 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         configuration.mediaTypesRequiringUserActionForPlayback = .all
         configuration.defaultWebpagePreferences.preferredContentMode = .desktop
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
+        // WebKit disables the element Fullscreen API by default. Players such
+        // as YouTube use it for their entire player, not just the video element.
+        configuration.preferences.isElementFullscreenEnabled = true
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
         webView.navigationDelegate = self

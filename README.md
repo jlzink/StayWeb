@@ -1,3 +1,10 @@
+## Version 0.2.1 — fullscreen
+
+- Enables WebKit element fullscreen on every tab so website player fullscreen controls can work, including YouTube.
+- Adds a **Fullscreen website** button (outward arrows) to hide the address bar, toolbar, and status bar on any website. The floating inward-arrows button exits without reloading the page.
+- Browser fullscreen expands the whole website; use the player’s fullscreen control for video-only fullscreen. Embedded players still follow their site’s fullscreen permissions.
+- Supports the existing portrait and landscape orientations. Real-device YouTube and other service playback checks remain required.
+
 ## Version 0.2.0 — streaming home and tabs
 
 - New teal globe/shield/play app icon, packaged in an asset catalog for iPhone and iPad.

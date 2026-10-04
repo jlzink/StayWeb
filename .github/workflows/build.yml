@@ -90,7 +90,7 @@ jobs:
           (cd build/package && zip -qry ../StayWeb-unsigned.ipa Payload)
           shasum -a 256 build/StayWeb-unsigned.ipa > build/SHA256SUMS.txt
           printf '%s\n' \
-            'StayWeb 0.2.0 — UNSIGNED device build.' \
+            'StayWeb 0.2.1 — UNSIGNED device build.' \
             'This IPA requires signing before installation; it is not an App Store or TestFlight build.' \
             'See README.md in the repository for installation and playback testing.' \
             > build/INSTALL.txt
