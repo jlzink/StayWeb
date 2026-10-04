@@ -1,0 +1,15 @@
+Ultimate Ad Filter — AdBlocker Ultimate contributors
+Source: https://filters.adavoid.org/ultimate-ad-filter.txt
+Homepage and licensing: https://adblockultimate.net/filters
+Distributed under Creative Commons Attribution 3.0 as offered by the filter publisher.
+License: https://creativecommons.org/licenses/by/3.0/
+This app converts the list to Safari content-blocking JSON using AdGuard
+SafariConverterLib 4.3.0 (a GPLv3 build tool, not linked into the app).
+The generated subset omits rules unsupported by Safari's content-blocking API.
+Source snapshot, version and SHA256 are included in the build artifacts.
+
+StreamingFilter.js is an independently implemented compatibility filter.
+Its request parameters, JSON paths and MPD ad markers were informed by
+Prime Video, Disney+, Hulu and Peacock rules in Ultimate Ad Filter. Changes: scoped to the four service domains,
+fail-open response transforms, no arbitrary third-party filter JavaScript.
+It does not implement all advanced rules from the source list.

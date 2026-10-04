@@ -87,6 +87,11 @@ struct BrowserView: View {
                 Form {
                     Section(browser.currentHost.isEmpty ? "Open a website to change its settings" : browser.currentHost) {
                         Toggle("Block ads and trackers", isOn: setting(\.blockAds))
+                        if let service = BrowserPolicy.streamingService(browser.currentHost) {
+                            Toggle("\(service) streaming filter", isOn: setting(\.streamingFilter))
+                            Text("Experimental playback filtering. Requires ad blocking. Turn off if playback fails; changing this setting reloads the page.")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
                         Toggle("Request desktop website", isOn: setting(\.desktop))
                         Toggle("Block App Store redirects", isOn: setting(\.blockAppLinks))
                         if browser.currentHost == "www.disneyplus.com" || browser.currentHost == "disneyplus.com" {
@@ -97,14 +102,19 @@ struct BrowserView: View {
                     }.disabled(browser.currentHost.isEmpty)
                     Section("Protection") {
                         LabeledContent("Ad blocker", value: browser.blockerStatus)
+                        LabeledContent("Filter version", value: browser.filterVersion)
                         LabeledContent("App links blocked this session", value: "\(browser.blockedAppLinks)")
-                        Text("External app schemes are always blocked. HTTP links stay in the browser where WebKit allows. Starter ad rules cover common networks, not every ad or streaming commercial.")
+                        Text("External app schemes are always blocked. HTTP links stay in the browser where WebKit allows. Uses a snapshot of Ultimate Ad Filter converted for WebKit. Some advanced Chrome extension rules are unsupported. Streaming ad removal is experimental.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    Section("Filter credits") {
+                        Text((try? String(contentsOf: Bundle.main.url(forResource: "FilterCredits", withExtension: "txt")!, encoding: .utf8)) ?? "AdBlocker Ultimate contributors")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                     Section("Website data") {
                         Button("Clear cookies and cache", role: .destructive) { clearConfirmation = true }
                     }
-                    Section("Prototype 0.1.1") {
+                    Section("Prototype 0.1.2") {
                         Text("One tab • iPhone and iPad • iOS 16+")
                         Text("Desktop mode requests a desktop site; it does not turn iOS into macOS. No DRM bypass or guaranteed streaming compatibility. Site-specific app-prompt removal is not included until validated selectors are available.")
                             .font(.footnote).foregroundStyle(.secondary)

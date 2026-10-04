@@ -35,6 +35,7 @@ final class BrowserTests: XCTestCase {
         XCTAssertFalse(decoded.desktop)
         XCTAssertFalse(decoded.blockAppLinks)
         XCTAssertTrue(decoded.disneyCompatibility)
+        XCTAssertTrue(decoded.streamingFilter)
         XCTAssertEqual(try JSONDecoder().decode(SiteSettings.self, from: JSONEncoder().encode(decoded)), decoded)
     }
 
@@ -47,7 +48,7 @@ final class BrowserTests: XCTestCase {
         await model.start()
         model.navigate("https://www.disneyplus.com/")
         XCTAssertEqual(model.webView.customUserAgent, BrowserPolicy.desktopSafariAgent)
-        XCTAssertEqual(model.webView.configuration.userContentController.userScripts.count, 1)
+        XCTAssertEqual(model.webView.configuration.userContentController.userScripts.count, 2)
         model.webView.stopLoading()
         model.navigate("https://example.com/")
         XCTAssertEqual(model.webView.customUserAgent ?? "", "")
@@ -90,6 +91,37 @@ final class BrowserTests: XCTestCase {
         let rule = try await WKContentRuleListStore.default().compileContentRuleList(
             forIdentifier: "StayWeb-Test-Rules", encodedContentRuleList: json)
         XCTAssertNotNil(rule)
+    }
+
+    @MainActor
+    func testPrimeManifestFilteringWithRealWebKitXMLParser() async throws {
+        let view = WKWebView()
+        let url = try XCTUnwrap(Bundle(for: BrowserModel.self).url(forResource: "StreamingFilter", withExtension: "js"))
+        let source = try String(contentsOf: url, encoding: .utf8)
+        let script = """
+        window.fixtureMPD = '<MPD mediaPresentationDuration="PT90S"><Period start="PT0S"><SupplementalProperty value="Ad"/><BaseURL>ad.mp4</BaseURL></Period><Period start="PT30S"><ContentProtection schemeIdUri="keep"/><BaseURL>movie.mp4</BaseURL></Period></MPD>';
+        window.fetch = async () => new Response(window.fixtureMPD);
+        (function(location) { \(source) })({protocol:'https:', hostname:'www.primevideo.com', href:'https://www.primevideo.com/'});
+        const response = await fetch('https://media.example/movie.mpd');
+        const text = await response.text();
+        const doc = new DOMParser().parseFromString(text, 'application/xml');
+        return doc.getElementsByTagName('Period').length === 1 &&
+          doc.getElementsByTagName('ContentProtection').length === 1 &&
+          text.includes('movie.mp4') && !text.includes('ad.mp4') &&
+          !doc.documentElement.hasAttribute('mediaPresentationDuration');
+        """
+        let result = try await view.callAsyncJavaScript(script, arguments: [:], in: nil, contentWorld: .page)
+        XCTAssertEqual(result as? Bool, true)
+        let unchanged = try await view.callAsyncJavaScript("""
+        // Malformed or all-ad manifests must remain untouched rather than empty.
+        for (const source of ['<MPD><Period><Role value="Ad"/></Period></MPD>', '<MPD><Period><BaseURL>movie.mp4</BaseURL></Period></MPD>', '<MPD invalid']) {
+          window.fixtureMPD = source;
+          const r = await fetch('https://media.example/plain.mpd');
+          if (await r.text() !== source) return false;
+        }
+        return true;
+        """, arguments: [:], in: nil, contentWorld: .page)
+        XCTAssertEqual(unchanged as? Bool, true)
     }
 
     @MainActor

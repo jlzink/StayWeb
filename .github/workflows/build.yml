@@ -21,6 +21,10 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Prepare maintained ad filters
+        run: python3 scripts/prepare_filters.py
+      - name: Test Prime Video filter fixtures
+        run: node scripts/test_prime_filter.js
       - name: Verify toolchain and project
         run: |
           set -euo pipefail
@@ -60,15 +64,6 @@ jobs:
             build/simulator.log
           retention-days: 14
 
-  device:
-    name: Unsigned iPhone and iPad IPA
-    needs: simulator
-    runs-on: macos-15
-    timeout-minutes: 20
-    env:
-      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Compile device build
         run: |
           set -euo pipefail
@@ -89,7 +84,7 @@ jobs:
           (cd build/package && zip -qry ../StayWeb-unsigned.ipa Payload)
           shasum -a 256 build/StayWeb-unsigned.ipa > build/SHA256SUMS.txt
           printf '%s\n' \
-            'StayWeb 0.1.1 — UNSIGNED device build.' \
+            'StayWeb 0.1.2 — UNSIGNED device build.' \
             'This IPA requires signing before installation; it is not an App Store or TestFlight build.' \
             'See README.md in the repository for installation and playback testing.' \
             > build/INSTALL.txt
@@ -103,4 +98,6 @@ jobs:
             build/SHA256SUMS.txt
             build/INSTALL.txt
             build/device.log
+            build/filters/ultimate.txt
+            build/filters/filter-info.json
           retention-days: 14

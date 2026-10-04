@@ -34,10 +34,10 @@ for target in ['StayWeb', 'StayWebTests']:
         if not file.is_file():
             continue
         ext = file.suffix
-        if ext not in ['.swift', '.json', '.xcprivacy']:
+        if ext not in ['.swift', '.json', '.xcprivacy', '.js', '.txt']:
             continue
         key = f'file:{file.relative_to(ROOT)}'
-        file_type = {'.swift': 'sourcecode.swift', '.json': 'text.json', '.xcprivacy': 'text.xml'}[ext]
+        file_type = {'.swift': 'sourcecode.swift', '.json': 'text.json', '.xcprivacy': 'text.xml', '.js': 'sourcecode.javascript', '.txt': 'text'}[ext]
         ref = obj(key, f'isa = PBXFileReference; lastKnownFileType = {file_type}; path = {q(file.relative_to(ROOT))}; sourceTree = SOURCE_ROOT;')
         file_ids.append(ref)
         build = obj('build:' + key, f'isa = PBXBuildFile; fileRef = {ref};')
@@ -60,8 +60,8 @@ for target in ['StayWeb', 'StayWebTests']:
             'SUPPORTED_PLATFORMS': 'iphoneos iphonesimulator',
             'SUPPORTS_MACCATALYST': 'NO',
             'CODE_SIGN_STYLE': 'Automatic',
-            'CURRENT_PROJECT_VERSION': '2',
-            'MARKETING_VERSION': '0.1.1',
+            'CURRENT_PROJECT_VERSION': '3',
+            'MARKETING_VERSION': '0.1.2',
             'SWIFT_OPTIMIZATION_LEVEL': '-Onone' if config == 'Debug' else '-O',
             'DEBUG_INFORMATION_FORMAT': 'dwarf' if config == 'Debug' else 'dwarf-with-dsym',
             'ENABLE_TESTABILITY': 'YES' if config == 'Debug' else 'NO',

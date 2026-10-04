@@ -16,6 +16,9 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     @Published var currentHost = ""
     @Published var blockedAppLinks = 0
     let webView: WKWebView
+    @Published var filterVersion = "Not loaded"
+    private var activeRuleCount = 0
+    private var streamingScript: String?
     private var ruleList: WKContentRuleList?
     private var observations: [NSKeyValueObservation] = []
     private var settings: [String: SiteSettings] = [:]
@@ -68,10 +71,21 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             guard let url = Bundle.main.url(forResource: "blocker", withExtension: "json") else {
                 throw NSError(domain: "StayWeb", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing blocker rules."])
             }
+            let metadataURL = Bundle.main.url(forResource: "filter-info", withExtension: "json")!
+            let metadata = try JSONSerialization.jsonObject(with: Data(contentsOf: metadataURL)) as? [String: Any]
+            guard metadata?["prepared"] as? Bool == true,
+                  let count = metadata?["ruleCount"] as? Int, count > 1000 else {
+                throw NSError(domain: "StayWeb", code: 2, userInfo: [NSLocalizedDescriptionKey: "Build filters were not prepared."])
+            }
+            activeRuleCount = count
+            filterVersion = metadata?["version"] as? String ?? "Unknown"
+            if let scriptURL = Bundle.main.url(forResource: "StreamingFilter", withExtension: "js") {
+                streamingScript = try String(contentsOf: scriptURL, encoding: .utf8)
+            }
             let json = try String(contentsOf: url, encoding: .utf8)
             ruleList = try await WKContentRuleListStore.default().compileContentRuleList(
-                forIdentifier: "StayWeb-Baseline-v1", encodedContentRuleList: json)
-            blockerStatus = "Starter rules ready"
+                forIdentifier: "StayWeb-Ultimate-" + filterVersion, encodedContentRuleList: json)
+            blockerStatus = "\(activeRuleCount) rules ready"
         } catch {
             blockerStatus = "Ad blocker unavailable"
             notice = "Ad blocking could not start: \(error.localizedDescription)"
@@ -94,7 +108,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         let controller = webView.configuration.userContentController
         controller.removeAllContentRuleLists()
         if value.blockAds, let ruleList { controller.add(ruleList) }
-        blockerStatus = !value.blockAds ? "Off for this site" : (ruleList == nil ? "Ad blocker unavailable" : "Starter rules active")
+        blockerStatus = !value.blockAds ? "Off for this site" : (ruleList == nil ? "Ad blocker unavailable" : "\(activeRuleCount) rules active")
     }
 
     private func wantsDisneyCompatibility(_ url: URL) -> Bool {
@@ -102,18 +116,31 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         return BrowserPolicy.isDisney(url) && value.desktop && value.disneyCompatibility
     }
 
+    private func wantsDesktopCompatibility(_ url: URL) -> Bool {
+        let value = preferences(for: url)
+        guard url.scheme == "https", value.desktop,
+              BrowserPolicy.streamingService(url.host ?? "") != nil else { return false }
+        return !BrowserPolicy.matches(url.host ?? "", domain: "disneyplus.com") || value.disneyCompatibility
+    }
+
     private func prepareIdentity(for url: URL) {
-        let compatible = wantsDisneyCompatibility(url)
+        let compatible = wantsDesktopCompatibility(url)
         webView.customUserAgent = compatible ? BrowserPolicy.desktopSafariAgent : nil
         let controller = webView.configuration.userContentController
         controller.removeAllUserScripts()
+        let value = preferences(for: url)
+        if BrowserPolicy.streamingService(url.host ?? "") != nil,
+           value.blockAds && value.streamingFilter, let streamingScript {
+            controller.addUserScript(WKUserScript(source: streamingScript, injectionTime: .atDocumentStart,
+                                                  forMainFrameOnly: true, in: .page))
+        }
         if compatible {
-            // Only modify the top-level Disney document; leave authentication sites alone.
+            // Only modify top-level supported streaming documents.
             // This is device-detection compatibility, not a media-capability polyfill.
             let script = """
             (() => {
               if (location.protocol !== 'https:' ||
-                  !['www.disneyplus.com', 'disneyplus.com'].includes(location.hostname)) return;
+                  !['disneyplus.com', 'primevideo.com', 'hulu.com', 'peacocktv.com'].some(d => location.hostname === d || location.hostname.endsWith('.' + d))) return;
               for (const [key, value] of [['platform', 'MacIntel'], ['maxTouchPoints', 0]]) {
                 try { Object.defineProperty(navigator, key, {get: () => value, configurable: true}); }
                 catch (_) {}
@@ -213,7 +240,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             notice = "Disney+ still returned to its app-download page. Automatic retries stopped; playback is not yet working."
         }
         if isMainNavigation {
-            let desiredAgent = wantsDisneyCompatibility(url) ? BrowserPolicy.desktopSafariAgent : nil
+            let desiredAgent = wantsDesktopCompatibility(url) ? BrowserPolicy.desktopSafariAgent : nil
             let identityChanged = (webView.customUserAgent ?? "") != (desiredAgent ?? "")
             prepareIdentity(for: url)
             // Reissue GET only when changing identity so its first HTTP request carries it.

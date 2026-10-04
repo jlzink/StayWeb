@@ -5,16 +5,18 @@ struct SiteSettings: Codable, Equatable {
     var desktop = true
     var blockAppLinks = true
     var disneyCompatibility = true
+    var streamingFilter = true
 
     init() {}
     private enum CodingKeys: String, CodingKey {
-        case blockAds, desktop, blockAppLinks, disneyCompatibility
+        case blockAds, desktop, blockAppLinks, disneyCompatibility, streamingFilter
     }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         blockAds = try values.decodeIfPresent(Bool.self, forKey: .blockAds) ?? true
         desktop = try values.decodeIfPresent(Bool.self, forKey: .desktop) ?? true
         blockAppLinks = try values.decodeIfPresent(Bool.self, forKey: .blockAppLinks) ?? true
+        streamingFilter = try values.decodeIfPresent(Bool.self, forKey: .streamingFilter) ?? true
         disneyCompatibility = try values.decodeIfPresent(Bool.self, forKey: .disneyCompatibility) ?? true
     }
 }
@@ -23,6 +25,14 @@ enum BrowserPolicy {
     static func matches(_ host: String, domain: String) -> Bool {
         let normalized = host.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
         return normalized == domain || normalized.hasSuffix("." + domain)
+    }
+
+    static func streamingService(_ host: String) -> String? {
+        for (domain, name) in [("primevideo.com", "Prime Video"), ("disneyplus.com", "Disney+"),
+                               ("hulu.com", "Hulu"), ("peacocktv.com", "Peacock")] {
+            if matches(host, domain: domain) { return name }
+        }
+        return nil
     }
 
     static func isAppStore(_ url: URL) -> Bool {

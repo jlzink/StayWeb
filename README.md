@@ -148,3 +148,33 @@ compilation or website behavior. CI uploads the `.xcresult` bundle and build log
 - https://developer.apple.com/documentation/webkit/wknavigationdelegate
 - https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md
 - https://help.disneyplus.com/article/disneyplus-computer-browser-requirements
+
+
+## 0.1.2 ad filtering update
+
+The build downloads one Ultimate Ad Filter snapshot and converts it using the
+checksum-pinned SafariConverterLib 4.3.0 tool. Run `python3 scripts/prepare_filters.py`
+on macOS before building locally. Simulator tests and the IPA use the same snapshot.
+The source list and metadata are included in the IPA workflow artifact for auditing.
+Settings show the converted rule count and source version. No remote JavaScript is executed.
+See bundled FilterCredits.txt for attribution and license links.
+
+Separate, default-on per-service settings inject an original document-start
+filter on HTTPS Prime Video, Disney+, Hulu and Peacock pages. It removes known ad cuepoint JSON fields,
+known ad periods from MPD responses, and ad-insertion playback request parameters.
+Fetch and XHR responses are handled; native media requests, workers, binary reads,
+and unlisted services are not covered by these JavaScript hooks. This is not a port
+of every Chrome extension rule. Turn the service streaming filter off if playback fails.
+
+Automated fixtures verify request/response behavior and WebKit XML processing.
+Successful paid streaming playback and absence of ads require device testing
+with a subscriber account; CI does not prove those outcomes. Disney compatibility
+remains experimental. The IPA is unsigned and must be signed for installation.
+
+Disney+ and Hulu use scoped JSON ad-field pruning; Hulu also filters known ad
+periods in DASH manifests. Peacock removes known ad-avail metadata while keeping
+unrelated pagination fields. The full network list includes Peacock SSAI/tracking
+rules. Desktop mode uses a desktop Safari identity on these four service domains;
+only Disney+ has the bounded /get-app recovery. No service is claimed verified
+until a device playback test succeeds. Hulu prototype-wide overrides from the
+reference list are intentionally not included because they affect every object.
