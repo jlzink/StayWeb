@@ -74,6 +74,10 @@ and install an iPad simulator runtime for iPadOS 18.4 or newer. In Xcode's
 **Settings → Locations**, select that Xcode installation for Command Line Tools.
 The build also uses Python 3. Internet access is needed to prepare the bundled
 content filters.
+On Intel Macs, filter preparation compiles the converter from the verified
+SafariConverterLib 4.3.0 source revision using Xcode's Swift toolchain. Its
+upstream prebuilt converter does not run on Intel. Swift Package Manager fetches
+the converter's pinned dependencies on the first preparation run.
 
 From the StayWeb project folder, run:
 

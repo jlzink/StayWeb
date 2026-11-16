@@ -25,6 +25,11 @@ not yet completed Xcode compilation or XCTest. Its earlier cloud run was cancell
 when the build destination changed to the local Mac. This document does not claim
 that an unrun suite passed.
 
+The first Intel Mac build reached filter preparation, where the upstream
+ConverterTool executable returned `Bad CPU type in executable`. Preparation now
+builds SafariConverterLib 4.3.0 from its pinned source revision on Intel Macs.
+Xcode compilation and XCTest remain pending another local run.
+
 ## Earlier versions
 
 v0.1.0: GitHub run 37159950606 passed simulator compilation/XCTest and physical-device compilation/IPA packaging. User installed on iPhone and completed Disney+ login; the site then displayed `/get-app`.
