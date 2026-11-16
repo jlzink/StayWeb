@@ -20,15 +20,19 @@ Builds and XCTest now run locally on the MacBook Pro. Run
 records whether optional Node.js fixtures passed or were skipped. GitHub Actions
 builds are disabled.
 
-The kiosk update has passed portable source and JavaScript fixture checks. It has
-not yet completed Xcode compilation or XCTest. Its earlier cloud run was cancelled
-when the build destination changed to the local Mac. This document does not claim
-that an unrun suite passed.
+The kiosk update has passed portable source and JavaScript fixture checks. Its
+first local simulator run compiled the app target but has not yet completed
+XCTest. The earlier cloud run was cancelled when builds moved to the local Mac.
+This document does not claim that an unrun suite passed.
 
 The first Intel Mac build reached filter preparation, where the upstream
 ConverterTool executable returned `Bad CPU type in executable`. Preparation now
 builds SafariConverterLib 4.3.0 from its pinned source revision on Intel Macs.
-Xcode compilation and XCTest remain pending another local run.
+The next local run passed preparation and reached the XCTest target, which failed
+on three `getAllCookies()` calls in `KioskBrowserTests.swift`. The iOS 26.5 SDK
+exposes the async API as `allCookies()`; those calls and the async cookie cleanup
+have been corrected. Simulator XCTest, unsigned device compilation, and physical
+iPad validation remain pending another local run.
 
 ## Earlier versions
 

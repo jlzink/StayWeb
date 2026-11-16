@@ -28,15 +28,15 @@ final class KioskBrowserTests: XCTestCase {
         ]))
         await first.dataStore.httpCookieStore.setCookie(cookie)
         let reopened = try BrowserContext.guest(id: firstID)
-        let firstCookies = await reopened.dataStore.httpCookieStore.getAllCookies()
-        let secondCookies = await second.dataStore.httpCookieStore.getAllCookies()
-        let ownerCookies = await BrowserContext.owner.dataStore.httpCookieStore.getAllCookies()
+        let firstCookies = await reopened.dataStore.httpCookieStore.allCookies()
+        let secondCookies = await second.dataStore.httpCookieStore.allCookies()
+        let ownerCookies = await BrowserContext.owner.dataStore.httpCookieStore.allCookies()
         XCTAssertEqual(firstCookies.first(where: { $0.name == name })?.value, "first-profile-session")
         XCTAssertFalse(secondCookies.contains(where: { $0.name == name }))
         XCTAssertFalse(ownerCookies.contains(where: { $0.name == name }))
         XCTAssertEqual(first.dataStore.identifier, firstID)
         XCTAssertEqual(second.dataStore.identifier, secondID)
-        await first.dataStore.httpCookieStore.delete(cookie)
+        await first.dataStore.httpCookieStore.deleteCookie(cookie)
     }
 
     @MainActor
