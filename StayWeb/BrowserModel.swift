@@ -17,6 +17,9 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     @Published var blockedAppLinks = 0
     var openNewTab: ((URL) -> Void)?
     let webView: WKWebView
+    let context: BrowserContext
+    private(set) var isRetired = false
+    private var guestDelegate: GuestBrowserUIDelegate?
     @Published var filterVersion = "Not loaded"
     private var activeRuleCount = 0
     private var streamingScript: String?
@@ -27,17 +30,23 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     private var disneyGate = DisneyGateRecovery()
     private let defaults: UserDefaults
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    convenience init(defaults: UserDefaults = .standard) {
+        self.init(context: .owner(defaults: defaults))
+    }
+
+    init(context: BrowserContext) {
+        self.context = context
+        self.defaults = context.defaults
+        let defaults = context.defaults
         if let data = defaults.data(forKey: "siteSettings"),
            let saved = try? JSONDecoder().decode([String: SiteSettings].self, from: data) {
             settings = saved
         }
         let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .default()
+        configuration.websiteDataStore = context.dataStore
         configuration.allowsInlineMediaPlayback = true
-        configuration.allowsPictureInPictureMediaPlayback = true
-        configuration.allowsAirPlayForMediaPlayback = true
+        configuration.allowsPictureInPictureMediaPlayback = !context.isGuest
+        configuration.allowsAirPlayForMediaPlayback = !context.isGuest
         configuration.mediaTypesRequiringUserActionForPlayback = .all
         configuration.defaultWebpagePreferences.preferredContentMode = .desktop
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
@@ -47,7 +56,14 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
         webView.navigationDelegate = self
-        webView.uiDelegate = self
+        if context.isGuest {
+            let delegate = GuestBrowserUIDelegate(browser: self)
+            guestDelegate = delegate
+            webView.uiDelegate = delegate
+        } else {
+            webView.uiDelegate = self
+        }
+        webView.allowsLinkPreview = !context.isGuest
         webView.allowsBackForwardNavigationGestures = true
         observations = [
             webView.observe(\.url, options: [.new]) { [weak self] _, _ in
@@ -69,7 +85,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     }
 
     func start() async {
-        guard !started else { return }
+        guard !started, !isRetired else { return }
         started = true
         do {
             guard let url = Bundle.main.url(forResource: "blocker", withExtension: "json") else {
@@ -89,16 +105,18 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             let json = try String(contentsOf: url, encoding: .utf8)
             ruleList = try await WKContentRuleListStore.default().compileContentRuleList(
                 forIdentifier: "StayWeb-Ultimate-" + filterVersion, encodedContentRuleList: json)
+            guard !isRetired, !Task.isCancelled else { return }
             blockerStatus = "\(activeRuleCount) rules ready"
         } catch {
             blockerStatus = "Ad blocker unavailable"
             notice = "Ad blocking could not start: \(error.localizedDescription)"
         }
+        guard !isRetired, !Task.isCancelled else { return }
         ready = true
     }
 
     func reuseProtection(from source: BrowserModel) {
-        guard !started else { return }
+        guard !started, !isRetired else { return }
         started = true
         ruleList = source.ruleList
         streamingScript = source.streamingScript
@@ -109,6 +127,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     }
 
     func refreshSettings() {
+        guard !isRetired else { return }
         if let data = defaults.data(forKey: "siteSettings"),
            let saved = try? JSONDecoder().decode([String: SiteSettings].self, from: data) {
             settings = saved
@@ -117,6 +136,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     }
 
     private func sync() {
+        guard !isRetired else { return }
         progress = webView.estimatedProgress
         loading = webView.isLoading
         canBack = webView.canGoBack
@@ -181,7 +201,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     }
 
     private func locationChanged() {
-        guard let url = webView.url else { return }
+        guard !isRetired, let url = webView.url else { return }
         address = url.absoluteString
         currentHost = url.host?.lowercased() ?? ""
         currentSettings = preferences(for: url)
@@ -198,6 +218,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     }
 
     func reload() {
+        guard !isRetired else { return }
         disneyGate.reset()
         if let url = webView.url {
             prepareIdentity(for: url)
@@ -210,7 +231,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     }
 
     func navigate(_ input: String) {
-        guard ready, let url = BrowserPolicy.address(input) else { return }
+        guard ready, !isRetired, let url = BrowserPolicy.address(input) else { return }
         notice = nil
         disneyGate.reset()
         prepareIdentity(for: url)
@@ -218,7 +239,9 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     }
 
     func saveSettings(_ value: SiteSettings) {
-        guard !currentHost.isEmpty else { return }
+        guard !isRetired, !currentHost.isEmpty else { return }
+        var value = value
+        if context.isGuest { value.blockAppLinks = true }
         refreshSettings()
         settings[currentHost] = value
         if let data = try? JSONEncoder().encode(settings) { defaults.set(data, forKey: "siteSettings") }
@@ -228,16 +251,22 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     }
 
     func clearData() async {
+        guard !isRetired else { return }
         webView.stopLoading()
         await webView.configuration.websiteDataStore.removeData(
             ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
+        guard !isRetired else { return }
         notice = "Cookies, cache and website storage cleared. Websites will require login again."
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                  preferences: WKWebpagePreferences,
                  decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void) {
-        guard let url = navigationAction.request.url else {
+        guard !isRetired, let url = navigationAction.request.url else {
+            decisionHandler(.cancel, preferences); return
+        }
+        if context.isGuest && navigationAction.shouldPerformDownload {
+            notice = "Downloads are unavailable in a kiosk profile."
             decisionHandler(.cancel, preferences); return
         }
         let scheme = url.scheme?.lowercased() ?? ""
@@ -252,7 +281,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         }
         // Use the source page's rule so a redirect cannot disable its own protection.
         let sourceSettings = webView.url.map { self.preferences(for: $0) } ?? currentSettings
-        if sourceSettings.blockAppLinks && BrowserPolicy.isAppStore(url) {
+        if (context.isGuest || sourceSettings.blockAppLinks) && BrowserPolicy.isAppStore(url) {
             blockedAppLinks += 1
             notice = "Blocked an App Store redirect. Playback still depends on the website."
             decisionHandler(.cancel, preferences); return
@@ -303,7 +332,41 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         decisionHandler(.allow, preferences)
     }
 
+    func shutdown() {
+        guard !isRetired else { return }
+        isRetired = true
+        ready = false
+        openNewTab = nil
+        observations.removeAll()
+        webView.stopLoading()
+        webView.pauseAllMediaPlayback(completionHandler: nil)
+        webView.setAllMediaPlaybackSuspended(true, completionHandler: nil)
+        webView.closeAllMediaPresentations(completionHandler: nil)
+        webView.isUserInteractionEnabled = false
+        webView.navigationDelegate = nil
+        webView.uiDelegate = nil
+        webView.configuration.userContentController.removeAllUserScripts()
+        webView.configuration.userContentController.removeAllContentRuleLists()
+        webView.loadHTMLString("", baseURL: nil)
+        webView.removeFromSuperview()
+        guestDelegate = nil
+    }
+
+    func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
+                 decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+        guard !isRetired else { decisionHandler(.cancel); return }
+        if context.isGuest && !BrowserPolicy.permitsGuestResponse(navigationResponse.response,
+                                                                  isMainFrame: navigationResponse.isForMainFrame,
+                                                                  canDisplay: navigationResponse.canShowMIMEType) {
+            notice = "Document downloads and native document previews are unavailable in a kiosk profile."
+            decisionHandler(.cancel)
+            return
+        }
+        decisionHandler(.allow)
+    }
+
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        guard !isRetired else { return }
         address = webView.url?.absoluteString ?? address
         currentHost = webView.url?.host?.lowercased() ?? ""
         currentSettings = webView.url.map { preferences(for: $0) } ?? SiteSettings()
@@ -311,6 +374,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard !isRetired else { return }
         title = webView.title ?? "StayWeb"
         address = webView.url?.absoluteString ?? address
         sync()
@@ -326,6 +390,7 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     }
 
     private func report(_ error: Error) {
+        guard !isRetired else { return }
         if (error as NSError).code != NSURLErrorCancelled {
             notice = error.localizedDescription
         }
@@ -333,12 +398,14 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        guard !isRetired else { return }
         notice = "The website process stopped. Tap reload to try again."
         sync()
     }
 
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+        guard !isRetired else { return nil }
         // Keep unsolicited popups blocked; tapped links can open a new protected tab.
         if navigationAction.targetFrame == nil, navigationAction.navigationType == .linkActivated {
             if let url = navigationAction.request.url, BrowserPolicy.isWeb(url),
@@ -349,5 +416,64 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             notice = "Popup blocked. Some sign-in flows may require a same-tab login."
         }
         return nil
+    }
+}
+
+/// Separate delegate so implementing an upload veto for guests does not disable
+/// Safari's normal native upload UI in the owner's existing browser.
+@MainActor
+private final class GuestBrowserUIDelegate: NSObject, WKUIDelegate {
+    private weak var browser: BrowserModel?
+
+    init(browser: BrowserModel) { self.browser = browser }
+
+    func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+                 for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+        browser?.webView(webView, createWebViewWith: configuration,
+                         for: navigationAction, windowFeatures: windowFeatures)
+    }
+
+    @available(iOS 18.4, *)
+    func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters,
+                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {
+        browser?.notice = "File, photo and camera uploads are unavailable in a kiosk profile."
+        completionHandler(nil)
+    }
+
+    func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+                 initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType,
+                 decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+        browser?.notice = "Camera and microphone access are unavailable in a kiosk profile."
+        decisionHandler(.deny)
+    }
+
+    func webView(_ webView: WKWebView, requestDeviceOrientationAndMotionPermissionFor origin: WKSecurityOrigin,
+                 initiatedByFrame frame: WKFrameInfo,
+                 decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+        decisionHandler(.deny)
+    }
+
+    func webView(_ webView: WKWebView, contextMenuConfigurationForElement elementInfo: WKContextMenuElementInfo,
+                 completionHandler: @escaping (UIContextMenuConfiguration?) -> Void) {
+        completionHandler(nil)
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+        browser?.notice = "A website dialog was blocked in this kiosk profile."
+        completionHandler()
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+        browser?.notice = "A website dialog was blocked in this kiosk profile."
+        completionHandler(false)
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String,
+                 defaultText: String?, initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping (String?) -> Void) {
+        browser?.notice = "A website dialog was blocked in this kiosk profile."
+        completionHandler(nil)
     }
 }

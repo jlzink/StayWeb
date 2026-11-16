@@ -1,5 +1,21 @@
 # Validation
 
+## Version 0.3.0 — kiosk profiles and independent admin code
+
+New automated coverage exercises independent persistent WebKit stores; mandatory
+guest restrictions; PIN persistence, corruption, throttling, and cancellation;
+admin-code setup/change races; lock-state gating; refused managed exit; and old-tab
+retirement. The workflow selects an iPad simulator and verifies the built app's
+single-scene Info.plist. The admin code has no device-passcode/biometric fallback.
+
+Source checks alone do not establish kiosk containment. The physical-device checks
+in `KIOSK.md` remain required for Guided Access/ASAM, app switching, restart,
+snapshots, fullscreen media, and system Password AutoFill or sharing interfaces.
+No personal iPad has been erased, supervised, enrolled, or configured by this change.
+
+Automated build status is recorded by the GitHub workflow for the tested commit;
+this document does not claim that an unrun suite passed.
+
 v0.1.0: GitHub run 37159950606 passed simulator compilation/XCTest and physical-device compilation/IPA packaging. User installed on iPhone and completed Disney+ login; the site then displayed `/get-app`.
 
 v0.1.1 adds exact-host desktop identity, preserved preference decoding, and single-attempt gate recovery including same-document URL observation. New tests cover origin/path boundaries, recovery-loop limits, settings migration, and setting/clearing the identity before navigation. GitHub CI must pass before delivery. Actual Disney+ playback requires another device test.

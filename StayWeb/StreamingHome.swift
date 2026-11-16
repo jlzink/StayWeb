@@ -53,11 +53,19 @@ struct StreamingHome: View {
     let ready: Bool
     let open: (String) -> Void
     let openInNewTab: (String) -> Void
-    @AppStorage("streamingShortcuts") private var saved = Data()
+    @AppStorage private var saved: Data
     @State private var query = ""
     @State private var adding = false
     @State private var name = ""
     @State private var address = ""
+    init(ready: Bool, defaults: UserDefaults = .standard,
+         open: @escaping (String) -> Void, openInNewTab: @escaping (String) -> Void) {
+        self.ready = ready
+        self.open = open
+        self.openInNewTab = openInNewTab
+        _saved = AppStorage(wrappedValue: Data(), "streamingShortcuts", store: defaults)
+    }
+
     private var custom: [StreamingShortcut] {
         (try? JSONDecoder().decode([StreamingShortcut].self, from: saved)) ?? []
     }

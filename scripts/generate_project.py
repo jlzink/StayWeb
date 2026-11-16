@@ -55,15 +55,15 @@ for target in ['StayWeb', 'StayWebTests']:
         vals = {
             'PRODUCT_NAME': '$(TARGET_NAME)',
             'PRODUCT_BUNDLE_IDENTIFIER': 'com.example.stayweb' + ('.tests' if test else ''),
-            'GENERATE_INFOPLIST_FILE': 'YES',
+            'GENERATE_INFOPLIST_FILE': 'YES' if test else 'NO',
             'IPHONEOS_DEPLOYMENT_TARGET': '16.0',
             'SWIFT_VERSION': '5.0',
             'TARGETED_DEVICE_FAMILY': '1,2',
             'SUPPORTED_PLATFORMS': 'iphoneos iphonesimulator',
             'SUPPORTS_MACCATALYST': 'NO',
             'CODE_SIGN_STYLE': 'Automatic',
-            'CURRENT_PROJECT_VERSION': '5',
-            'MARKETING_VERSION': '0.2.1',
+            'CURRENT_PROJECT_VERSION': '6',
+            'MARKETING_VERSION': '0.3.0',
             'SWIFT_OPTIMIZATION_LEVEL': '-Onone' if config == 'Debug' else '-O',
             'DEBUG_INFORMATION_FORMAT': 'dwarf' if config == 'Debug' else 'dwarf-with-dsym',
             'ENABLE_TESTABILITY': 'YES' if config == 'Debug' else 'NO',
@@ -73,11 +73,10 @@ for target in ['StayWeb', 'StayWebTests']:
             vals.update({'TEST_HOST': '$(BUILT_PRODUCTS_DIR)/StayWeb.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/StayWeb', 'BUNDLE_LOADER': '$(TEST_HOST)'})
         else:
             vals.update({
+                'INFOPLIST_FILE': 'StayWeb/Info.plist',
                 'INFOPLIST_KEY_CFBundleDisplayName': 'StayWeb',
                 'ASSETCATALOG_COMPILER_APPICON_NAME': 'AppIcon',
                 'INFOPLIST_KEY_LSApplicationCategoryType': 'public.app-category.utilities',
-                'INFOPLIST_KEY_UILaunchScreen_Generation': 'YES',
-                'INFOPLIST_KEY_UIApplicationSceneManifest_Generation': 'YES',
                 'INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone': 'UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight',
                 'INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad': 'UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight',
                 'LD_RUNPATH_SEARCH_PATHS': '$(inherited) @executable_path/Frameworks',

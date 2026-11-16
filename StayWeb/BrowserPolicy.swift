@@ -44,6 +44,24 @@ enum BrowserPolicy {
         ["https", "http"].contains(url.scheme?.lowercased() ?? "")
     }
 
+    /// Guest browsing uses webpage rendering, not native document previews or
+    /// downloads, which can expose system sharing and document-provider UI.
+    static func permitsGuestResponse(_ response: URLResponse, isMainFrame _: Bool,
+                                     canDisplay: Bool) -> Bool {
+        guard canDisplay else { return false }
+        if let response = response as? HTTPURLResponse,
+           let disposition = response.value(forHTTPHeaderField: "Content-Disposition"),
+           disposition.split(separator: ";").first?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "attachment" {
+            return false
+        }
+        // Apply the same MIME rule to iframe navigations. Otherwise a PDF in an
+        // iframe would expose the same native preview we reject at top level.
+        // Ordinary image/video subresources do not use WKNavigationResponse.
+        guard let mime = response.mimeType?.lowercased() else { return false }
+        return ["text/html", "application/xhtml+xml", "text/plain", "application/json"].contains(mime)
+    }
+
     static func address(_ text: String) -> URL? {
         let input = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !input.isEmpty else { return nil }

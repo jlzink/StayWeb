@@ -1,3 +1,19 @@
+## Version 0.3.0 — StayWeb kiosk and separate users
+
+- Separate StayWeb admin code for owner controls, user management, and kiosk exit;
+  independent of the device unlock code, with no device-code or biometric fallback.
+- PIN-protected user profiles with independent persistent website stores, site
+  preferences, and streaming shortcuts. Existing owner website logins are preserved.
+- Guest browsing requires confirmed Guided Access or authorized Single App Mode.
+  An ordinary app cannot provide its own operating-system app-switch lock.
+- Guest upload, media-capture, app handoff, and document-preview restrictions;
+  inactive/background transitions revoke administrator access and cover private UI.
+- Kiosk profiles require iOS/iPadOS **18.4+**; ordinary browsing remains iOS 16+.
+
+See [KIOSK.md](KIOSK.md) for setup, manual versus managed exit behavior, the separate
+Guided Access passcode, and required physical-device validation. Build locally on
+the Mac with `bash scripts/build-local.sh`, or use the existing macOS build workflow.
+
 ## Version 0.2.1 — fullscreen
 
 - Enables WebKit element fullscreen on every tab so website player fullscreen controls can work, including YouTube.

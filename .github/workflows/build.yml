@@ -32,11 +32,11 @@ jobs:
           python3 scripts/validate.py
           python3 scripts/generate_project.py
           git diff --exit-code -- StayWeb.xcodeproj
-      - name: Select available iPhone simulator
+      - name: Select available iPad simulator
         id: simulator
         run: |
           set -euo pipefail
-          DEVICE_ID=$(python3 scripts/select_simulator.py)
+          DEVICE_ID=$(python3 scripts/select_simulator.py --family ipad)
           echo "id=$DEVICE_ID" >> "$GITHUB_OUTPUT"
           xcrun simctl bootstatus "$DEVICE_ID" -b
       - name: Build and test
@@ -53,6 +53,8 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent \
             build/Simulator/Build/Products/Debug-iphonesimulator/StayWeb.app \
             build/StayWeb-Simulator.zip
+      - name: Verify kiosk application metadata
+        run: python3 scripts/verify_kiosk_metadata.py build/Simulator/Build/Products/Debug-iphonesimulator/StayWeb.app
       - name: Capture streaming dashboard
         run: |
           xcrun simctl launch '${{ steps.simulator.outputs.id }}' com.example.stayweb
@@ -90,7 +92,7 @@ jobs:
           (cd build/package && zip -qry ../StayWeb-unsigned.ipa Payload)
           shasum -a 256 build/StayWeb-unsigned.ipa > build/SHA256SUMS.txt
           printf '%s\n' \
-            'StayWeb 0.2.1 — UNSIGNED device build.' \
+            'StayWeb 0.3.0 — UNSIGNED device build.' \
             'This IPA requires signing before installation; it is not an App Store or TestFlight build.' \
             'See README.md in the repository for installation and playback testing.' \
             > build/INSTALL.txt
