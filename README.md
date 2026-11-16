@@ -12,7 +12,8 @@
 
 See [KIOSK.md](KIOSK.md) for setup, manual versus managed exit behavior, the separate
 Guided Access passcode, and required physical-device validation. Build locally on
-the Mac with `bash scripts/build-local.sh`, or use the existing macOS build workflow.
+your MacBook Pro with `bash scripts/build-local.sh`. Builds and tests run on your
+Mac; the repository does not start GitHub Actions builds.
 
 ## Version 0.2.1 — fullscreen
 
@@ -31,14 +32,19 @@ the Mac with `bash scripts/build-local.sh`, or use the existing macOS build work
 - Switching tabs pauses media in the previous tab. Press play to resume when returning.
 - Shared website login storage and site settings, with the existing streaming filters retained.
 
-Install the unsigned IPA using the same signing identity and bundle ID as the previous build to update it in place.
+Use the same signing identity and bundle ID as the previous build to update it in place.
 
 # StayWeb — iPhone / iPad browser prototype
 
-A native SwiftUI + WKWebView browser focused on staying on the web. Version 0.1.2,
-iOS/iPadOS 16 or newer. One universal app target. No third-party application dependencies.
+A native SwiftUI + WKWebView browser focused on staying on the web. Version 0.3.0,
+iOS/iPadOS 16 or newer (18.4+ for kiosk profiles). One universal app target. No
+third-party application dependencies.
 
-**Status:** v0.1.0 compiled and passed simulator tests on GitHub. A real iPhone
+**Current validation:** the kiosk update still requires compilation and XCTest on
+your Mac, followed by the physical-device checks in [KIOSK.md](KIOSK.md). Portable
+source checks do not establish that the app builds or that the OS lock works.
+
+**Earlier validation:** v0.1.0 compiled and passed simulator tests on GitHub. A real iPhone
 successfully logged in but Disney+ redirected to `/get-app`. v0.1.1 adds a scoped,
 experimental desktop compatibility mode and one-shot recovery from that page.
 Real-device playback is not yet validated. This is not a DRM bypass.
@@ -61,40 +67,69 @@ when desktop mode is enabled. Other origins revert to their normal identity. It 
 reject playback. The `/home` recovery target is experimental and may change.
 
 
-## Get your first GitHub build
+## Build locally on your MacBook Pro
 
-1. Create a GitHub repository (suggested name: `StayWeb`). Private is fine.
-2. Extract this ZIP. Put the **contents** of the `StayWeb` folder at the repository
-   root. The root must contain `StayWeb.xcodeproj`, `.github`, `StayWeb`,
-   `StayWebTests`, and `scripts`. Commit using GitHub Desktop or Git; this preserves
-   the `.github` folder. Do not upload the ZIP itself as your source.
-3. Push to GitHub. In **Actions → Build StayWeb**, open the new run.
-   The workflow also supports **Run workflow** once it is on the default branch.
-4. The first job compiles the app and runs XCTest on an available iPhone simulator.
-   After the tests pass, the same job builds for physical iPhones/iPads and packages an unsigned IPA.
-5. Download **StayWeb-Unsigned-IPA** from the successful run's Artifacts section,
-   unzip that artifact, and find `StayWeb-unsigned.ipa` inside it.
+Install Xcode 16.4 or a compatible newer version, launch it once to finish setup,
+and install an iPad simulator runtime for iPadOS 18.4 or newer. In Xcode's
+**Settings → Locations**, select that Xcode installation for Command Line Tools.
+The build also uses Python 3. Internet access is needed to prepare the bundled
+content filters.
 
-No Apple certificates, passwords or developer-team secrets are required to compile.
-The workflow has read-only repository permissions and does not upload to Apple or
-publish a release. Runner usage remains subject to your GitHub account's allowance.
-It uses `macos-15` with Xcode 16.4. If GitHub later removes that Xcode installation,
-update `DEVELOPER_DIR` in the job to an installed stable version and rerun tests.
+From the StayWeb project folder, run:
 
-## Installation: compilation is not signing
+```sh
+bash scripts/build-local.sh
+```
 
-The IPA is intentionally unsigned and **cannot be installed just by tapping it**.
-Use a signing/sideloading tool you trust that supports your current iOS version,
-or sign and run this project through Xcode on a Mac with your own Apple account.
+This command prepares the filters, validates the source, runs XCTest on an iPad
+simulator, and builds an unsigned physical-device app. It saves the combined log,
+test result bundle, and build products in a timestamped `build/local/` folder.
+It uses the checked-in Xcode project and preserves local signing settings.
+If Node.js is available, it also runs the JavaScript filter fixtures; otherwise it
+reports that optional check as skipped and continues with the native tests.
+
+No Apple certificates, passwords, or developer-team secrets are required for these
+unsigned builds. GitHub remains the source repository; automatic cloud builds have
+been removed. Installation on your iPad is a separate local Xcode step below.
+
+## First build with your Apple developer account
+
+1. In **Xcode → Settings → Apple Accounts** (called **Accounts** in some versions),
+   add the Apple Account used for your developer membership.
+2. Open `StayWeb.xcodeproj`. Select the **StayWeb** app target, then
+   **Signing & Capabilities**. Enable **Automatically manage signing** and choose
+   your developer team. If both a Personal Team and your paid membership's team
+   appear, choose the membership's team.
+3. Set a bundle identifier available to your team. The checked-in
+   `com.example.stayweb` is a placeholder. If updating an installed copy, first
+   check its existing bundle ID and developer team; retaining both is the normal
+   update path. A change of team or bundle ID needs separate migration planning
+   before assuming that existing website logins will carry over.
+4. Select the same team for **StayWebTests** if Xcode asks. Its bundle identifier
+   should use the app identifier followed by `.tests`.
+5. Connect and unlock your iPad, accept its **Trust This Computer** prompt, and
+   choose it as Xcode's run destination. Click **Register** if Xcode offers it;
+   automatic signing manages the development provisioning profile.
+6. On the iPad, enable **Settings → Privacy & Security → Developer Mode** when
+   prompted, restart, and confirm. This allows development builds to run; it does
+   not enable kiosk restrictions.
+7. After the local build/test command succeeds, choose **Product → Run** in Xcode
+   to sign, install, and launch StayWeb with your account.
+
+The local validation script builds without signing, so it can diagnose source
+and test failures independently of account setup. Its unsigned device output is
+not directly installable; Xcode's **Run** step creates the signed development app.
+
 Personal-development installation may require Developer Mode and periodic renewal.
 TestFlight/App Store distribution needs the appropriate Apple Developer membership,
 a registered unique bundle ID, signing, provisioning, and a separate distribution
 workflow. None of those credentials are included or requested by this project.
 
-The default bundle ID is `com.example.stayweb`; for your own signed builds replace
-that prefix in `scripts/generate_project.py`, then regenerate the project. The tests
-use the `.tests` suffix. A distribution-ready app will also need proper app icons,
-its privacy disclosures, and release validation.
+The default bundle ID is `com.example.stayweb`. If you previously changed it for
+your installed copy, retain that value. The generator also contains the default
+identifier, so update it before regenerating a project with a custom identifier.
+The tests use the `.tests` suffix. Distribution requires its own privacy
+disclosures and release validation.
 
 ## Included behavior
 
@@ -124,13 +159,13 @@ its privacy disclosures, and release validation.
 
 ## Known prototype limits
 
-One tab only; no bookmark/history manager, download manager, private mode, default
+No bookmark/history manager, download manager, private mode, default
 browser entitlement, background audio guarantee or content-filter updater. The
 bundled filters are refreshed at build time rather than automatically on device.
 They do not guarantee removal of commercials embedded in streaming video.
 
-Automatic script popups are blocked. User-tapped new-window links load in the same
-tab. OAuth flows that depend on a separate window or external app may not work.
+Automatic script popups are blocked. User-tapped new-window links open a protected
+tab. OAuth flows that depend on an external app may not work.
 Native JavaScript dialog handling is not implemented. Ordinary HTTPS browsing is
 the target; iOS transport-security defaults may reject insecure HTTP sites.
 
@@ -140,7 +175,7 @@ narrowly scoped site adapter only after inspecting and testing the real page.
 
 ## First device test (on both iPhone and iPad)
 
-1. Launch; confirm the start screen shows more than 1,000 rules ready. Settings must show version 0.1.2 and the filter snapshot version.
+1. Launch; confirm the start screen shows more than 1,000 rules ready. Settings must show version 0.3.0 and the filter snapshot version.
 2. Open Disney+, sign in yourself, and attempt playback with desktop mode on.
 3. If playback fails, disable ad blocking for that host and retry. Then test mobile
    mode. Record which combination reaches login, catalog, and actual playback.
@@ -170,20 +205,23 @@ python3 scripts/generate_project.py
 ```
 
 `generate_project.py` deterministically generates the Xcode project and shared
-scheme from the two source directories. CI rejects an out-of-date generated
-project. Do not hand-edit the generated project; edit the generator instead.
+scheme from the two source directories. Run it after adding or removing source
+files, preserving your bundle ID and signing settings in the generator before
+regeneration. Routine local builds do not regenerate the project.
 
 XCTest covers URL normalization, App Store hostname boundaries, actual WebKit rule
 compilation, and an actual WebKit navigation being rejected by the browser delegate.
 The portable validator checks files and generated rule metadata only; it cannot prove Swift
-compilation or website behavior. CI uploads the `.xcresult` bundle and build logs.
+compilation or website behavior. The local build command saves the `.xcresult`
+bundle and build log on your Mac.
 
 ## References
 
 - https://developer.apple.com/documentation/webkit/wkcontentruleliststore
 - https://developer.apple.com/documentation/webkit/wkwebpagepreferences
 - https://developer.apple.com/documentation/webkit/wknavigationdelegate
-- https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md
+- https://developer.apple.com/documentation/xcode/building-and-running-an-app
+- https://developer.apple.com/documentation/xcode/enabling-developer-mode-on-a-device
 - https://help.disneyplus.com/article/disneyplus-computer-browser-requirements
 
 
@@ -191,8 +229,9 @@ compilation or website behavior. CI uploads the `.xcresult` bundle and build log
 
 The build downloads one Ultimate Ad Filter snapshot and converts it using the
 checksum-pinned SafariConverterLib 4.3.0 tool. Run `python3 scripts/prepare_filters.py`
-on macOS before building locally. Simulator tests and the IPA use the same snapshot.
-The source list and metadata are included in the IPA workflow artifact for auditing.
+on macOS before building locally. The build script does this automatically;
+simulator tests and the device build use the same snapshot. The preparation step
+saves the source list and metadata in the project for auditing.
 Settings show the converted rule count and source version. No remote JavaScript is executed.
 See bundled FilterCredits.txt for attribution and license links.
 
@@ -205,8 +244,8 @@ of every Chrome extension rule. Turn the service streaming filter off if playbac
 
 Automated fixtures verify request/response behavior and WebKit XML processing.
 Successful paid streaming playback and absence of ads require device testing
-with a subscriber account; CI does not prove those outcomes. Disney compatibility
-remains experimental. The IPA is unsigned and must be signed for installation.
+with a subscriber account; automated tests do not prove those outcomes. Disney
+compatibility remains experimental. Installation from Xcode requires signing.
 
 Disney+ and Hulu use scoped JSON ad-field pruning; Hulu also filters known ad
 periods in DASH manifests. Peacock removes known ad-avail metadata while keeping

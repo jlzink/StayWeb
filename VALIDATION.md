@@ -5,7 +5,7 @@
 New automated coverage exercises independent persistent WebKit stores; mandatory
 guest restrictions; PIN persistence, corruption, throttling, and cancellation;
 admin-code setup/change races; lock-state gating; refused managed exit; and old-tab
-retirement. The workflow selects an iPad simulator and verifies the built app's
+retirement. The local build script selects an iPad simulator and verifies the built app's
 single-scene Info.plist. The admin code has no device-passcode/biometric fallback.
 
 Source checks alone do not establish kiosk containment. The physical-device checks
@@ -13,12 +13,23 @@ in `KIOSK.md` remain required for Guided Access/ASAM, app switching, restart,
 snapshots, fullscreen media, and system Password AutoFill or sharing interfaces.
 No personal iPad has been erased, supervised, enrolled, or configured by this change.
 
-Automated build status is recorded by the GitHub workflow for the tested commit;
-this document does not claim that an unrun suite passed.
+Builds and XCTest now run locally on the MacBook Pro. Run
+`bash scripts/build-local.sh` from the project folder; the timestamped
+`build/local/` directory contains `build.log`, `Tests.xcresult`,
+`DeviceBuild.xcresult`, and the simulator and device build products. The log also
+records whether optional Node.js fixtures passed or were skipped. GitHub Actions
+builds are disabled.
+
+The kiosk update has passed portable source and JavaScript fixture checks. It has
+not yet completed Xcode compilation or XCTest. Its earlier cloud run was cancelled
+when the build destination changed to the local Mac. This document does not claim
+that an unrun suite passed.
+
+## Earlier versions
 
 v0.1.0: GitHub run 37159950606 passed simulator compilation/XCTest and physical-device compilation/IPA packaging. User installed on iPhone and completed Disney+ login; the site then displayed `/get-app`.
 
-v0.1.1 adds exact-host desktop identity, preserved preference decoding, and single-attempt gate recovery including same-document URL observation. New tests cover origin/path boundaries, recovery-loop limits, settings migration, and setting/clearing the identity before navigation. GitHub CI must pass before delivery. Actual Disney+ playback requires another device test.
+v0.1.1 adds exact-host desktop identity, preserved preference decoding, and single-attempt gate recovery including same-document URL observation. Tests cover origin/path boundaries, recovery-loop limits, settings migration, and setting/clearing the identity before navigation. Actual Disney+ playback requires another device test.
 
 
 0.1.2: Node fixtures cover scoped request rewriting, credentials, fetch response

@@ -26,8 +26,10 @@ by iPadOS. Physical-device validation is required before relying on the kiosk.
 
 ## Set up on a personal iPad
 
-1. Install the update over the existing StayWeb app using the same bundle ID and
-   signing identity. The existing default WebKit store remains the owner's store;
+1. Follow [the first developer-account build setup](README.md#first-build-with-your-apple-developer-account).
+   To update an existing StayWeb installation, retain its bundle ID and developer
+   team; do not assume an installation under a different team carries its data
+   over. The existing default WebKit store remains the owner's store;
    existing owner website logins are not migrated into guest profiles.
 2. Tap the shield at the left of the browser address bar to open **Owner Controls**.
 3. On first setup, choose and confirm a StayWeb admin code of **6–32 digits**.
@@ -117,7 +119,9 @@ compatibility still require device testing.
 
 ## Build and verification
 
-On a Mac with Xcode 16.4 or a compatible newer Xcode:
+Build and test locally on the MacBook Pro with Xcode 16.4 or a compatible newer
+Xcode, Python 3, and an installed iPad simulator runtime for iPadOS 18.4 or newer.
+From the project folder:
 
 ```sh
 bash scripts/build-local.sh
@@ -126,10 +130,11 @@ bash scripts/build-local.sh
 The script prepares the existing maintained filters, checks the project, runs the
 test suite on an available iPad simulator, compiles the device target without
 signing, verifies that multiple scenes are disabled in the built app, and records
-logs under `build/local/`. To install, open the existing Xcode project, retain the
-same bundle identifier and signing identity, select the device and run.
+`build.log`, `Tests.xcresult`, and build products under a timestamped
+`build/local/` folder. To install, open the existing Xcode project, retain the
+same bundle identifier and developer team when updating, select the device and run.
 
-The repository's existing GitHub macOS workflow also builds and runs the tests.
+GitHub Actions builds have been removed; compilation and XCTest run on your Mac.
 Automated cases cover profile cookie separation, settings scope, persisted PIN
 delays, malformed storage, failed writes, cancellation, concurrent code changes,
 old-session retirement, refused lock acquisition, and refused lock release.

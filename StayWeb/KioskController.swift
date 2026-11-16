@@ -226,6 +226,7 @@ final class KioskController: ObservableObject {
     }
 
     func becameInactive() {
+        applicationActive = false
         privacyCovered = true
         snapshotShield.cover()
         // The admin challenge belongs to StayWeb, not a system credential panel.
